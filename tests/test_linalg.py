@@ -28,6 +28,18 @@ def test_solve_simd_tail():
     assert np.allclose(linalg.solve(a, b), scipy_linalg.solve(a, b))
 
 
+def test_overwrite_avoids_rhs_copy():
+    rng = np.random.default_rng(205)
+    a = rng.normal(size=(10, 10)) + 4 * np.eye(10)
+    b = np.ascontiguousarray(rng.normal(size=(10, 5)))
+    expected = scipy_linalg.solve(a, b)
+    result = linalg.solve(
+        a.copy(), b, overwrite_a=True, overwrite_b=True, check_finite=False
+    )
+    assert np.shares_memory(result, b)
+    assert np.allclose(result, expected)
+
+
 def test_solve_transposed(matrices):
     a, _, b = matrices
     a += 2 * np.eye(9)

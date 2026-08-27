@@ -5,8 +5,8 @@ import numpy as np
 from ._lib import addr, f64, lib
 
 
-def _matrix(a, check_finite):
-    value = f64(a, copy=True)
+def _matrix(a, check_finite, *, copy=True):
+    value = f64(a, copy=copy)
     if value.ndim != 2 or value.shape[0] != value.shape[1]:
         raise ValueError("expected a square matrix")
     if check_finite and not np.isfinite(value).all():
@@ -14,8 +14,8 @@ def _matrix(a, check_finite):
     return value
 
 
-def _rhs(b, n, check_finite):
-    value = f64(b, copy=True)
+def _rhs(b, n, check_finite, *, copy=True):
+    value = f64(b, copy=copy)
     was_vector = value.ndim == 1
     if was_vector:
         value = np.ascontiguousarray(value.reshape(n, 1))
@@ -36,10 +36,10 @@ def solve(
     assume_a=None,
     transposed=False,
 ):
-    matrix = _matrix(a, check_finite)
+    matrix = _matrix(a, check_finite, copy=not overwrite_a)
     if transposed:
         matrix = np.ascontiguousarray(matrix.T)
-    rhs, was_vector = _rhs(b, len(matrix), check_finite)
+    rhs, was_vector = _rhs(b, len(matrix), check_finite, copy=not overwrite_b)
     if matrix.size == 0 or rhs.size == 0:
         return rhs[:, 0] if was_vector else rhs
     ok = lib().msc_lu_solve(addr(matrix), addr(rhs), len(matrix), rhs.shape[1])
@@ -49,7 +49,7 @@ def solve(
 
 
 def cholesky(a, lower=False, overwrite_a=False, check_finite=True):
-    matrix = _matrix(a, check_finite)
+    matrix = _matrix(a, check_finite, copy=not overwrite_a)
     if matrix.size == 0:
         return matrix
     if not lib().msc_cholesky(addr(matrix), len(matrix)):
@@ -66,8 +66,8 @@ def solve_triangular(
     overwrite_b=False,
     check_finite=True,
 ):
-    matrix = _matrix(a, check_finite)
-    rhs, was_vector = _rhs(b, len(matrix), check_finite)
+    matrix = _matrix(a, check_finite, copy=False)
+    rhs, was_vector = _rhs(b, len(matrix), check_finite, copy=not overwrite_b)
     if trans in (0, "N", "n"):
         transpose = 0
     elif trans in (1, 2, "T", "t", "C", "c"):

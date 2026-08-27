@@ -31,6 +31,12 @@ def test_fft_padding_truncation_and_frequencies():
     assert np.array_equal(fft.rfftfreq(8, 0.25), scipy_fft.rfftfreq(8, 0.25))
 
 
+def test_fft_two_stream_recurrence_and_scalar_tail():
+    rng = np.random.default_rng(128)
+    x = rng.normal(size=128) + 1j * rng.normal(size=128)
+    assert np.allclose(fft.fft(x), scipy_fft.fft(x), atol=2e-12)
+
+
 def test_fft_shifts_and_empty_errors():
     x = np.arange(7)
     assert np.array_equal(fft.fftshift(x), scipy_fft.fftshift(x))

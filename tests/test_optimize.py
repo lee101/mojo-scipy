@@ -23,6 +23,15 @@ def test_linear_sum_assignment_integer_ties():
     assert cost[rows, cols].sum() == 5
 
 
+def test_linear_sum_assignment_simd_tail_path():
+    rng = np.random.default_rng(310)
+    cost = rng.normal(size=(31, 34))
+    rows, cols = optimize.linear_sum_assignment(cost)
+    ref_rows, ref_cols = scipy_optimize.linear_sum_assignment(cost)
+    assert np.array_equal(rows, ref_rows)
+    assert cost[rows, cols].sum() == pytest.approx(cost[ref_rows, ref_cols].sum())
+
+
 def test_rosen_and_derivative_parity():
     x = np.array([1.2, 0.9, -0.3, 2.0, 1.1])
     assert optimize.rosen(x) == pytest.approx(scipy_optimize.rosen(x))

@@ -105,27 +105,63 @@ def _fft_radix2(src: FPtr, dst: FPtr, n: Int, inverse: Bool):
         var angle = (2.0 if inverse else -2.0) * PI / Float64(length)
         var wlen_r = cos(angle)
         var wlen_i = sin(angle)
+        var half = length >> 1
         var base = 0
         while base < n:
-            var wr = 1.0
-            var wi = 0.0
-            var half = length >> 1
-            for k in range(half):
+            var wr0 = 1.0
+            var wi0 = 0.0
+            var wr1 = wlen_r
+            var wi1 = wlen_i
+            var step_r = wlen_r * wlen_r - wlen_i * wlen_i
+            var step_i = 2.0 * wlen_r * wlen_i
+            var k = 0
+            while k + 2 <= half:
                 var even = base + k
                 var odd = even + half
                 var orr = dst[2 * odd]
                 var oii = dst[2 * odd + 1]
-                var tr = wr * orr - wi * oii
-                var ti = wr * oii + wi * orr
+                var tr = wr0 * orr - wi0 * oii
+                var ti = wr0 * oii + wi0 * orr
                 var er = dst[2 * even]
                 var ei = dst[2 * even + 1]
                 dst[2 * even] = er + tr
                 dst[2 * even + 1] = ei + ti
                 dst[2 * odd] = er - tr
                 dst[2 * odd + 1] = ei - ti
-                var next_wr = wr * wlen_r - wi * wlen_i
-                wi = wr * wlen_i + wi * wlen_r
-                wr = next_wr
+                var next_wr0 = wr0 * step_r - wi0 * step_i
+                wi0 = wr0 * step_i + wi0 * step_r
+                wr0 = next_wr0
+
+                even += 1
+                odd += 1
+                orr = dst[2 * odd]
+                oii = dst[2 * odd + 1]
+                tr = wr1 * orr - wi1 * oii
+                ti = wr1 * oii + wi1 * orr
+                er = dst[2 * even]
+                ei = dst[2 * even + 1]
+                dst[2 * even] = er + tr
+                dst[2 * even + 1] = ei + ti
+                dst[2 * odd] = er - tr
+                dst[2 * odd + 1] = ei - ti
+                var next_wr1 = wr1 * step_r - wi1 * step_i
+                wi1 = wr1 * step_i + wi1 * step_r
+                wr1 = next_wr1
+                k += 2
+            while k < half:
+                var even = base + k
+                var odd = even + half
+                var orr = dst[2 * odd]
+                var oii = dst[2 * odd + 1]
+                var tr = wr0 * orr - wi0 * oii
+                var ti = wr0 * oii + wi0 * orr
+                var er = dst[2 * even]
+                var ei = dst[2 * even + 1]
+                dst[2 * even] = er + tr
+                dst[2 * even + 1] = ei + ti
+                dst[2 * odd] = er - tr
+                dst[2 * odd + 1] = ei - ti
+                k += 1
             base += length
         length <<= 1
 
@@ -330,12 +366,15 @@ def msc_linear_assignment(
         u[i] = 0.0
     for ii in range(1, n + 1):
         p[0] = Int64(ii)
+        var used_count = 0
         var j0 = 0
         for j in range(m + 1):
             minv[j] = 1.7976931348623157e308
             used[j] = 0
         while True:
             used[j0] = 1
+            cols[used_count] = Int64(j0)
+            used_count += 1
             var i0 = Int(p[j0])
             var delta = 1.7976931348623157e308
             var j1 = 0
@@ -378,12 +417,26 @@ def msc_linear_assignment(
                         delta = minv[j]
                         j1 = j
                 j += 1
-            for j in range(m + 1):
-                if used[j] != 0:
-                    u[Int(p[j])] += delta
-                    v[j] -= delta
-                else:
+            j = 0
+            var delta_vec = SIMD[DType.float64, W](delta)
+            while j + W <= m + 1:
+                var is_used = used.load[width=W](j).ne(0)
+                minv.store(
+                    j,
+                    is_used.select(
+                        minv.load[width=W](j),
+                        minv.load[width=W](j) - delta_vec,
+                    ),
+                )
+                j += W
+            while j < m + 1:
+                if used[j] == 0:
                     minv[j] -= delta
+                j += 1
+            for visited in range(used_count):
+                var used_j = Int(cols[visited])
+                u[Int(p[used_j])] += delta
+                v[used_j] -= delta
             j0 = j1
             if p[j0] == 0:
                 break

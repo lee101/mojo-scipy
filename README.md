@@ -81,18 +81,23 @@ one means Mojo was faster in this run.
 
 | Kernel | Mojo (ms) | SciPy (ms) | SciPy / Mojo | Result |
 |---|---:|---:|---:|---|
-| signal.lfilter (2M, 9-tap FIR) | 22.06 | 39.94 | 1.81x | faster |
-| fft.fft (262144 complex128) | 11.50 | 11.45 | 1.00x | slower |
-| linalg.solve (192x192, 8 RHS) | 2.23 | 0.80 | 0.36x | slower |
-| optimize.linear_sum_assignment (600x600) | 24.48 | 16.55 | 0.68x | slower |
-| PchipInterpolator eval (1M queries) | 125.06 | 187.40 | 1.50x | faster |
-| stats.zscore (5M float64) | 81.17 | 219.01 | 2.70x | faster |
+| signal.lfilter (2M, 9-tap FIR) | 16.61 | 20.78 | 1.25x | faster |
+| fft.fft (262144 complex128) | 10.11 | 7.59 | 0.75x | slower |
+| linalg.solve (192x192, 8 RHS) | 1.14 | 0.73 | 0.64x | slower |
+| optimize.linear_sum_assignment (600x600) | 14.63 | 13.46 | 0.92x | slower |
+| PchipInterpolator eval (1M queries) | 95.27 | 144.04 | 1.51x | faster |
+| stats.zscore (5M float64) | 49.75 | 194.48 | 3.91x | faster |
 
-SciPy is plainly faster where its mature PocketFFT, LAPACK/BLAS, and optimized
-assignment implementation dominate. Mojo does best here on fused,
+SciPy remains faster where its mature PocketFFT and LAPACK/BLAS implementations
+dominate. SIMD potential updates and compact augmenting-path bookkeeping bring
+the assignment kernel close to parity. Mojo does best here on fused,
 memory-oriented kernels that avoid temporary arrays and Python-level passes.
 
-No GPU path is included.
+No GPU path is included. The benchmarked LU problem is too small to amortize
+device transfer and launch costs, while radix-2 FFT stages require global
+synchronization. The direct DFT fallback has high nominal arithmetic intensity,
+but offloading its O(n²) algorithm would not be competitive with an optimized
+O(n log n) CPU FFT. CPU remains the default and only execution path.
 
 ## How it works
 
